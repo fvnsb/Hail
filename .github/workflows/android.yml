@@ -1,45 +1,35 @@
-name: Build Android APK Release
+name: Android CI
 
 on:
   push:
     branches:
-      - master            # Ubah sesuai branch utama repo
-  workflow_dispatch:     # Bisa trigger manual juga
-
-env:
-  MAIN_MODULE: app        # Modul utama aplikasi
+      - master
+  workflow_dispatch:
 
 jobs:
-  build-release:
+  build:
     runs-on: ubuntu-latest
-
+    if: ${{ !startsWith(github.event.head_commit.message, '[skip ci]') && github.repository_owner == 'fvnsb' }}
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Set up JDK 21
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '21'
-        cache: 'gradle'
-
-    - name: Grant Gradle wrapper execution permission
-      run: chmod +x ./gradlew
-
-    - name: Setup signing keystore
-      run: |
-        echo "${{ secrets.KEYSTORE }}" | base64 -d > ${{ env.MAIN_MODULE }}/keystore.jks
-
-    - name: Build APK release
-      run: ./gradlew ${{ env.MAIN_MODULE }}:assembleRelease \
-        -Pandroid.injected.signing.store.file=${{ env.MAIN_MODULE }}/keystore.jks \
-        -Pandroid.injected.signing.store.password=${{ secrets.KEYSTORE_PASSWORD }} \
-        -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} \
-        -Pandroid.injected.signing.key.password=${{ secrets.KEY_ALIAS_PASSWORD }}
-
-    - name: Upload APK release artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: app-release-apk
-        path: ${{ env.MAIN_MODULE }}/build/outputs/apk/release/*.apk
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+      - name: Build with Gradle
+        run: |
+          echo "commit=$(echo ${{ github.sha }} | cut -c-7)" >> $GITHUB_ENV
+          touch signing.properties
+          echo storeFile=../keystore.jks >> signing.properties
+          echo storePassword=${{ secrets.KEYSTORE_PASSWORD }} >> signing.properties
+          echo keyAlias=${{ secrets.KEYSTORE_ALIAS }} >> signing.properties
+          echo keyPassword=${{ secrets.KEYSTORE_ALIAS_PASSWORD }} >> signing.properties
+          echo ${{ secrets.KEYSTORE }} | base64 --decode > keystore.jks
+          ./gradlew assembleRelease
+      - name: Upload a Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Hail@${{ env.commit }}
+          path: app/build/outputs/apk/release/*.apk
