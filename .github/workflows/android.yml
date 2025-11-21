@@ -1,52 +1,45 @@
-name: Android CI - Release APK
+name: Build Android APK Release
 
 on:
   push:
     branches:
-      - master
-    paths-ignore:
-      - '**.md'
-      - 'fastlane/**'
-      - '.github/**'
-      - '!.github/workflows/android.yml'
+      - master            # Ubah sesuai branch utama repo
+  workflow_dispatch:     # Bisa trigger manual juga
+
+env:
+  MAIN_MODULE: app        # Modul utama aplikasi
 
 jobs:
-  build:
+  build-release:
     runs-on: ubuntu-latest
-    if: ${{ !startsWith(github.event.head_commit.message, '[skip ci]') }}
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Setup Java JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '21'
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '21'
+        cache: 'gradle'
 
-      - name: Build Release APK
-        run: |
-          echo "commit=$(echo ${{ github.sha }} | cut -c-7)" >> $GITHUB_ENV
-          touch signing.properties
-          echo storeFile=../keystore.jks >> signing.properties
-          echo storePassword=${{ secrets.KEYSTORE_PASSWORD }} >> signing.properties
-          echo keyAlias=${{ secrets.KEYSTORE_ALIAS }} >> signing.properties
-          echo keyPassword=${{ secrets.KEYSTORE_ALIAS_PASSWORD }} >> signing.properties
-          echo ${{ secrets.KEYSTORE }} | base64 --decode > keystore.jks
-          ./gradlew assembleRelease
+    - name: Grant Gradle wrapper execution permission
+      run: chmod +x ./gradlew
 
-      - name: Upload Release APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Hail-release-${{ env.commit }}
-          path: app/build/outputs/apk/release/*.apk
+    - name: Setup signing keystore
+      run: |
+        echo "${{ secrets.KEYSTORE }}" | base64 -d > ${{ env.MAIN_MODULE }}/keystore.jks
 
-      - name: Create GitHub Release
-        if: success()
-        uses: softprops/action-gh-release@v1
-        with:
-          files: app/build/outputs/apk/release/*.apk
-          tag_name: release-${{ env.commit }}
-          body: "Auto-generated release from commit ${{ env.commit }}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Build APK release
+      run: ./gradlew ${{ env.MAIN_MODULE }}:assembleRelease \
+        -Pandroid.injected.signing.store.file=${{ env.MAIN_MODULE }}/keystore.jks \
+        -Pandroid.injected.signing.store.password=${{ secrets.KEYSTORE_PASSWORD }} \
+        -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} \
+        -Pandroid.injected.signing.key.password=${{ secrets.KEY_ALIAS_PASSWORD }}
+
+    - name: Upload APK release artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-release-apk
+        path: ${{ env.MAIN_MODULE }}/build/outputs/apk/release/*.apk
