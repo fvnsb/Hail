@@ -4,12 +4,16 @@ on:
   push:
     branches:
       - master
-  workflow_dispatch:
+    paths-ignore:
+      - '**.md'
+      - 'fastlane/**'
+      - '.github/**'
+      - '!.github/workflows/android.yml'
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    if: ${{ !startsWith(github.event.head_commit.message, '[skip ci]') && github.repository_owner == 'fvnsb' }}
+    if: ${{ !startsWith(github.event.head_commit.message, '[skip ci]') && github.repository_owner == 'aistra0528' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
