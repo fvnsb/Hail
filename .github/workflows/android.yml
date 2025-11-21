@@ -1,4 +1,4 @@
-name: Android CI
+name: Android CI - Release APK
 
 on:
   push:
@@ -13,16 +13,18 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    if: ${{ !startsWith(github.event.head_commit.message, '[skip ci]') && github.repository_owner == 'aistra0528' }}
+    if: ${{ !startsWith(github.event.head_commit.message, '[skip ci]') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup Java JDK
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
-      - name: Build with Gradle
+
+      - name: Build Release APK
         run: |
           echo "commit=$(echo ${{ github.sha }} | cut -c-7)" >> $GITHUB_ENV
           touch signing.properties
@@ -32,8 +34,19 @@ jobs:
           echo keyPassword=${{ secrets.KEYSTORE_ALIAS_PASSWORD }} >> signing.properties
           echo ${{ secrets.KEYSTORE }} | base64 --decode > keystore.jks
           ./gradlew assembleRelease
-      - name: Upload a Build Artifact
+
+      - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Hail@${{ env.commit }}
+          name: Hail-release-${{ env.commit }}
           path: app/build/outputs/apk/release/*.apk
+
+      - name: Create GitHub Release
+        if: success()
+        uses: softprops/action-gh-release@v1
+        with:
+          files: app/build/outputs/apk/release/*.apk
+          tag_name: release-${{ env.commit }}
+          body: "Auto-generated release from commit ${{ env.commit }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
